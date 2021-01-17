@@ -3,15 +3,14 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/time.h>
 #include <unistd.h>
+#include <sys/time.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
-
 
 #ifndef min
 #define min(a, b) (((a) < (b)) ? (a) : (b))
@@ -25,12 +24,9 @@
 
 #define CLAMP2BYTE(v) (((unsigned) (v)) < 255 ? (v) : (v < 0) ? 0 : 255)
 
-#include <stdint.h>
-
 int myabs(int in)
 {
-    int mask = (int64_t) in >> 32;
-    return (in ^ mask) - 1;
+    return ((in>>31)^in) - (in>>31);
 }
 
 unsigned int detect(uint8_t *pixel,
@@ -42,14 +38,13 @@ unsigned int detect(uint8_t *pixel,
     int stride = width * channels;
     int last_col = width * channels - channels;
     int last_row = height * stride - stride;
+
     unsigned int sum = 0;
     for (int y = 0; y < height; y++) {
         int cur_row = stride * y;
         int next_row = min(cur_row + stride, last_row);
         uint8_t *next_scanline = pixel + next_row;
         uint8_t *cur_scanline = pixel + cur_row;
-
-
         for (int x = 0; x < width; x++) {
             int cur_col = x * channels;
             int next_col = min(cur_col + channels, last_col);
@@ -83,6 +78,7 @@ void compute_offset(int *out, int len, int left, int right, int step)
 {
     assert(out);
     assert((len >= 0) && (left >= 0) && (right >= 0));
+
     for (int x = -left; x < len + right; x++) {
         int pos = x;
         int len2 = 2 * len;
@@ -165,11 +161,12 @@ void denoise(uint8_t *out,
                 prev_sum_pow[c] += col_pow[index + c];
             }
         }
+
         for (int c = 0; c < channels; ++c) {
             // mean filter (space)
             int mean = prev_sum[c] / window_size;
             int diff = mean - scan_in_line[c];
-            // diff should do abs
+            // take abs value before clamp
             int edge = CLAMP2BYTE(myabs(diff));
             // add edge weight
             int masked_edge =
@@ -180,6 +177,7 @@ void denoise(uint8_t *out,
                       diff * var / (var + smooth_table[scan_in_line[c]]);
             scan_out_line[c] = CLAMP2BYTE(out);
         }
+
         scan_in_line += channels, scan_out_line += channels;
         for (int x = 1; x < width; x++) {
             int last_row = row_off[x - radius - 1];
@@ -190,11 +188,9 @@ void denoise(uint8_t *out,
                                   col_pow[next_row + c];
                 int mean = prev_sum[c] / window_size;
                 int diff = mean - scan_in_line[c];
-                // diff should take abs value
                 int edge = CLAMP2BYTE(myabs(diff));
                 int masked_edge =
                     (edge * scan_in_line[c] + (256 - edge) * mean) >> 8;
-                // edge
                 int var = prev_sum_pow[c] / window_size - mean * mean;
                 int out = masked_edge -
                           diff * var / (var + smooth_table[scan_in_line[c]]);
@@ -279,12 +275,10 @@ void denoise2(
             int pix = *scan_in_line;
             int mean = prev_sum / window_size;
             int diff = mean - pix;
-            // diff should take abs value
+            // take abs value before clamp
             int edge = CLAMP2BYTE(myabs(diff));
             int masked_edge = (edge*pix + (256 - edge)*mean) >> 8;
-            int var = (prev_sum_pow - mean*prev_sum)/window_size;
-            // This is not as efficient as it is in denoise
-            //int var = prev_sum_pow / window_size - mean * mean;
+            int var = (prev_sum_pow - mean*prev_sum) / window_size;
             int out = masked_edge - diff*var / (var + smooth_table[pix]);
             scan_out_line[ch_idx] = CLAMP2BYTE(out);
 
@@ -323,7 +317,6 @@ int main(int argc, char *argv[])
 
     /* clang-format off */
     int opt;
-
     while ((opt = getopt (argc, argv, "i:l:o:")) != -1){
         switch(opt){
             case 'i': {
@@ -381,7 +374,6 @@ int main(int argc, char *argv[])
         ) / 2;
         smooth_table[i] = max(smooth_table[i], 1);
     }
-
 #if OPT_PLANE
     #pragma omp parallel for
     for(int i = 0; i < channels; i++)
