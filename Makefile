@@ -21,7 +21,6 @@ OBJS = main.o
 deps := $(OBJS:%.o=%.o.d)
 
 %.o: %.c
-	@echo "$(ENABLE_OPENMP)"
 	$(CC) -o $@ $(CFLAGS) -c -MMD -MF $@.d $<
 main: $(THIRD_PARTIES) $(OBJS)
 	$(CC) -o $@ $(OBJS) $(LDFLAGS)
